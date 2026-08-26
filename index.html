@@ -188,6 +188,10 @@
     <label>كلمة المرور</label>
     <input id="in-pass" type="password" autocapitalize="off" autocorrect="off">
   </div>
+  <div class="field">
+    <label>رابط البروكسي (اختياري — لو السيرفر HTTP بدون HTTPS)</label>
+    <input id="in-proxy" type="text" inputmode="url" placeholder="https://your-proxy.workers.dev" autocapitalize="off" autocorrect="off">
+  </div>
 
   <button id="login-btn">دخول</button>
   <div id="login-status" class="mono"></div>
@@ -254,12 +258,19 @@
   const $ = (sel) => document.querySelector(sel);
   const el = (tag, cls, html) => { const e = document.createElement(tag); if(cls) e.className = cls; if(html!==undefined) e.innerHTML = html; return e; };
 
+  function proxyWrap(url){
+    if(session && session.proxy){
+      return session.proxy + "/?url=" + encodeURIComponent(url);
+    }
+    return url;
+  }
+
   function apiUrl(action, extra){
     let u = session.base + "/player_api.php?username=" + encodeURIComponent(session.user) +
       "&password=" + encodeURIComponent(session.pass);
     if(action) u += "&action=" + action;
     if(extra) u += extra;
-    return u;
+    return proxyWrap(u);
   }
 
   async function apiGet(action, extra){
@@ -282,6 +293,7 @@
     let server = $("#in-server").value.trim().replace(/\/+$/,"");
     const user = $("#in-user").value.trim();
     const pass = $("#in-pass").value.trim();
+    const proxy = $("#in-proxy").value.trim().replace(/\/+$/,"");
 
     if(!/^https?:\/\//i.test(server)) server = "http://" + server;
     if(!server || !user || !pass){
@@ -291,7 +303,7 @@
       return;
     }
 
-    session = { base: server, user, pass };
+    session = { base: server, user, pass, proxy };
 
     try{
       const info = await apiGet(null, null);
@@ -304,7 +316,7 @@
       switchTab("live");
     }catch(err){
       statusEl.style.display = "none";
-      errEl.textContent = "تعذّر الاتصال — تأكد من الرابط والبيانات، أو أن السيرفر يسمح بالاتصال من المتصفح مباشرة. (" + err.message + ")";
+      errEl.textContent = "تعذّر الاتصال — تأكد من الرابط والبيانات. لو السيرفر HTTP فقط (بدون HTTPS)، لازم تعبّي حقل رابط البروكسي بالأسفل. (" + err.message + ")";
       errEl.style.display = "block";
       session = null;
     }
@@ -401,7 +413,7 @@
       const img = item.stream_icon || item.cover || "";
       if(img){
         const imgEl = document.createElement("img");
-        imgEl.src = img; imgEl.loading = "lazy";
+        imgEl.src = proxyWrap(img); imgEl.loading = "lazy";
         imgEl.onerror = ()=>{ imgEl.remove(); media.appendChild(el("div","tile-fallback", type==="live" ? "📡" : "🎬")); };
         media.appendChild(imgEl);
       }else{
@@ -426,11 +438,11 @@
   // ---------------- player ----------------
   function streamUrl(type, item){
     if(type==="live"){
-      return session.base + "/live/" + session.user + "/" + session.pass + "/" + item.stream_id + ".m3u8";
+      return proxyWrap(session.base + "/live/" + session.user + "/" + session.pass + "/" + item.stream_id + ".m3u8");
     }
     if(type==="vod"){
       const ext = item.container_extension || "mp4";
-      return session.base + "/movie/" + session.user + "/" + session.pass + "/" + item.stream_id + "." + ext;
+      return proxyWrap(session.base + "/movie/" + session.user + "/" + session.pass + "/" + item.stream_id + "." + ext);
     }
     return null; // series handled per-episode
   }
@@ -528,7 +540,7 @@
             (ep.info && ep.info.duration ? "<small>" + ep.info.duration + "</small>" : "")));
           row.addEventListener("click", ()=>{
             const ext = (ep.container_extension) || "mp4";
-            const url = session.base + "/series/" + session.user + "/" + session.pass + "/" + ep.id + "." + ext;
+            const url = proxyWrap(session.base + "/series/" + session.user + "/" + session.pass + "/" + ep.id + "." + ext);
             $("#player-title-bar").textContent = item.name + " — حلقة " + ep.episode_num;
             playVideo(url);
           });
